@@ -37,24 +37,31 @@ Local Docker-hosted server that wraps [ServiceNow/ServiceNowDocs](https://github
 
 ## Run it
 
+Prereq: Docker Desktop (macOS/Windows) or Docker Engine (Linux) running.
+
 ```bash
 git clone https://github.com/benglo/servicenow-docs-server.git
 cd servicenow-docs-server
+cp .env.example .env       # then edit MCP_AUTH_TOKEN (or leave blank for localhost-only)
 docker compose up -d --build
 ```
 
-First start clones the bare repo + adds all worktrees + builds FTS indexes. Expect a few minutes the first time; subsequent restarts are seconds.
+First start clones the bare repo + adds all worktrees + builds FTS5 indexes. Expect a few minutes the first time; subsequent restarts are seconds.
 
-Sanity check:
+Sanity check (works in any shell — bash, zsh, PowerShell 7, cmd):
 
-```powershell
+```bash
 curl http://localhost:8080/health
 curl "http://localhost:8080/search?q=glide+record&release=latest&limit=5"
 ```
 
-## Wiring into Claude Code (MCP)
+> **Note for Windows PowerShell 5.x users**: `curl` is an alias for `Invoke-WebRequest` and won't accept the same flags. Use `curl.exe ...` or `Invoke-WebRequest ...` instead. PowerShell 7 (`pwsh`) does not have this alias.
 
-Copy `.mcp.json.example` to a project's `.mcp.json` (or merge into `~/.claude/.mcp.json` for global). The container must already be running — Claude's MCP client spawns `docker exec -i` to attach a stdio transport on demand.
+## Wiring into Claude (MCP)
+
+The same `mcpServers` block works for Claude Code (per-project `.mcp.json` or user-global) and Claude Desktop (`claude_desktop_config.json`). The container must already be running — Claude's MCP client spawns `docker exec -i` on demand to attach a stdio transport.
+
+**Default config (Windows / Linux / most installs):**
 
 ```json
 {
@@ -67,17 +74,58 @@ Copy `.mcp.json.example` to a project's `.mcp.json` (or merge into `~/.claude/.m
 }
 ```
 
-Project-scoped is recommended — only loads the tool definitions into Claude's context when you're in a ServiceNow project.
+**macOS Claude Desktop**: GUI apps on macOS don't always inherit the shell's `PATH`, so `docker` can't be found even when it's installed. Use the absolute path instead:
+
+```json
+{
+  "mcpServers": {
+    "servicenow-docs": {
+      "command": "/usr/local/bin/docker",       // Intel Mac / Docker Desktop default
+      "args": ["exec", "-i", "servicenow-docs", "node", "dist/mcp-stdio.js"]
+    }
+  }
+}
+```
+
+On Apple Silicon with Homebrew Docker, use `/opt/homebrew/bin/docker`. Confirm yours with `which docker` in a terminal.
+
+**Config file locations:**
+
+| Client | Path |
+|---|---|
+| Claude Code (project) | `<your-project>/.mcp.json` |
+| Claude Code (user-global) | `~/.claude/.mcp.json` |
+| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Claude Desktop (Linux) | `~/.config/Claude/claude_desktop_config.json` |
+
+Project-scoped is recommended for Claude Code — only loads the tool definitions into Claude's context when you're in a ServiceNow project. Claude Desktop is always global.
+
+## Smoke-test the MCP stdio transport
+
+A canned JSON-RPC handshake lives at `test-mcp.jsonl`. Pipe it into the container's stdio entrypoint to verify the server responds correctly.
+
+```bash
+# bash / zsh
+cat test-mcp.jsonl | docker exec -i servicenow-docs node dist/mcp-stdio.js
+```
+
+```powershell
+# Windows PowerShell
+Get-Content test-mcp.jsonl | docker exec -i servicenow-docs node dist/mcp-stdio.js
+```
+
+Expect 5 JSON-RPC responses: initialize, tools/list, and three tool calls.
 
 ## Refreshing docs
 
 Restart the container — it `git fetch --all` on boot and rebuilds indexes:
 
-```powershell
+```bash
 docker compose restart servicenow-docs
 ```
 
-(Or add a host cron / Task Scheduler entry to do it nightly.)
+(Or add a host cron / launchd / Task Scheduler entry to do it nightly.)
 
 ## Configuration (env vars)
 
@@ -88,10 +136,19 @@ docker compose restart servicenow-docs
 | `RELEASES` | `australia,zurich,yokohama,xanadu` | Comma-separated branches to worktree. The repo only keeps the 3 newest GA releases (or 4 if one is in early access), so update this when ServiceNow ships a new release. |
 | `DEFAULT_RELEASE` | `australia` | Used when a request omits `release`. Aliases `latest` and `main` map to this. |
 | `HTTP_PORT` | `8080` | |
+| `MCP_AUTH_TOKEN` | _(empty)_ | Bearer token required on the `/mcp` HTTP endpoint. Empty disables auth — only safe for localhost. Generate via `openssl rand -base64 32` (mac/linux) or the PowerShell snippet in `.env.example`. |
 
 ## Local dev (without Docker)
 
+```bash
+# bash / zsh
+npm install
+export REPO_ROOT="$PWD/.repo"
+npm run dev
+```
+
 ```powershell
+# Windows PowerShell
 npm install
 $env:REPO_ROOT = "$PWD\.repo"
 npm run dev

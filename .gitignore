@@ -1,5 +1,12 @@
+# Local secrets — NEVER commit. Bearer tokens for the MCP HTTP transport
+# (and any other host-specific config) live here.
+.env
+.env.*
+!.env.example
+
 node_modules
 dist
 *.log
-.env
 .DS_Store
+.idea
+.vscode

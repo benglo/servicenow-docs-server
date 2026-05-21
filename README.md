@@ -37,8 +37,9 @@ Local Docker-hosted server that wraps [ServiceNow/ServiceNowDocs](https://github
 
 ## Run it
 
-```powershell
-cd "C:\Offline Development\servicenow-docs-server"
+```bash
+git clone https://github.com/benglo/servicenow-docs-server.git
+cd servicenow-docs-server
 docker compose up -d --build
 ```
 

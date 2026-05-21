@@ -1,0 +1,20 @@
+services:
+  servicenow-docs:
+    build: .
+    container_name: servicenow-docs
+    restart: unless-stopped
+    environment:
+      REPO_URL: https://github.com/ServiceNow/ServiceNowDocs.git
+      REPO_ROOT: /repo
+      RELEASES: australia,zurich,yokohama,xanadu
+      DEFAULT_RELEASE: australia
+      HTTP_PORT: "8080"
+      HTTP_HOST: 0.0.0.0
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:-}
+    ports:
+      - "8080:8080"
+    volumes:
+      - servicenow-docs:/repo
+
+volumes:
+  servicenow-docs:

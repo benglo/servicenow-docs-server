@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "servicenow-docs": {
+      "command": "docker",
+      "args": [
+        "exec",
+        "-i",
+        "servicenow-docs",
+        "node",
+        "dist/mcp-stdio.js"
+      ]
+    }
+  }
+}

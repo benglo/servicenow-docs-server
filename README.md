@@ -27,13 +27,20 @@ Local Docker-hosted server that wraps [ServiceNow/ServiceNowDocs](https://github
 
 ## Endpoints / Tools
 
+Eight MCP tools (and matching HTTP endpoints). The first four are core lookup; the last four are workflow extras — `diff_topic` in particular is the killer feature for ServiceNow upgrade planning.
+
 | HTTP | MCP tool | Purpose |
 |---|---|---|
 | `GET /releases` | `list_releases` | Branch names available. |
 | `GET /index?release=latest` | `get_index` | The `llms.txt` routing index. **Call first.** |
 | `GET /topic?path=...&release=latest` | `get_topic` | Raw markdown for one file. |
-| `GET /search?q=...&release=latest&limit=10` | `search_docs` | FTS5 fallback when llms.txt doesn't hit. |
+| `GET /search?q=...&release=latest&limit=10` | `search_docs` | bm25-ranked FTS5 search with snippets. |
+| `GET /diff?path=...&release_a=...&release_b=...` | `diff_topic` | Unified `git diff` of a topic across two releases — for upgrade planning. |
+| `GET /topics?release=...&prefix=...&limit=200` | `list_topics` | Browse the markdown tree under a path prefix. Cap 1000. |
+| `GET /metadata?release=...&product=...&topic_type=...&classification=...` | `find_by_metadata` | Exact-match filter on YAML frontmatter fields (e.g. all REST API reference docs). |
+| `GET /release-notes?release=...` | `get_release_notes` | Canonical release notes page as full markdown. |
 | `GET /health` | — | Liveness. |
+| `POST/GET /mcp` | — | Streamable-HTTP MCP transport (bearer-auth). |
 
 ## Run it
 

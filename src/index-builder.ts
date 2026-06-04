@@ -47,10 +47,16 @@ export function buildIndex(release: string) {
       path UNINDEXED,
       title,
       body,
+      product UNINDEXED,
+      classification UNINDEXED,
+      topic_type UNINDEXED,
+      last_updated UNINDEXED,
       tokenize = 'porter unicode61'
     );
   `);
-  const insert = db.prepare("INSERT INTO docs (path, title, body) VALUES (?, ?, ?)");
+  const insert = db.prepare(
+    "INSERT INTO docs (path, title, body, product, classification, topic_type, last_updated) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  );
   const markdownRoot = join(tree, "markdown");
   let count = 0;
   db.exec("BEGIN");
@@ -60,7 +66,15 @@ export function buildIndex(release: string) {
       const parsed = parseFrontmatter(raw);
       const rel = relative(tree, file).replace(/\\/g, "/");
       const title = parsed.data.title || extractTitle(parsed.content, rel);
-      insert.run(rel, title, parsed.content);
+      insert.run(
+        rel,
+        title,
+        parsed.content,
+        parsed.data.product || "",
+        parsed.data.classification || "",
+        parsed.data.topic_type || "",
+        parsed.data.last_updated || ""
+      );
       count++;
     }
     db.exec("COMMIT");

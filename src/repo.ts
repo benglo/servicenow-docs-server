@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
 import { simpleGit, type SimpleGit } from "simple-git";
 import { BARE_DIR, RELEASES, REPO_ROOT, REPO_URL, WORKTREES_DIR } from "./config.js";
 
@@ -53,4 +53,79 @@ export function topicPath(release: string, relPath: string): string {
   const normalised = relPath.replace(/^\/+/, "").replace(/\\/g, "/");
   if (normalised.includes("..")) throw new Error("Path traversal not allowed");
   return join(worktreePath(release), normalised);
+}
+
+function sanitiseRelPath(relPath: string): string {
+  const normalised = relPath.replace(/^\/+/, "").replace(/\\/g, "/");
+  if (normalised.includes("..")) throw new Error("Path traversal not allowed");
+  return normalised;
+}
+
+/**
+ * Run `git diff branchA:path branchB:path` against the bare clone and return
+ * the unified diff as plain text. Empty result means the file is identical
+ * (or doesn't exist in either branch).
+ */
+export async function diffTopic(
+  path: string,
+  releaseA: string,
+  releaseB: string
+): Promise<string> {
+  const safePath = sanitiseRelPath(path);
+  const git = simpleGit(BARE_DIR);
+  try {
+    return await git.raw([
+      "diff",
+      "--no-color",
+      `${releaseA}:${safePath}`,
+      `${releaseB}:${safePath}`,
+    ]);
+  } catch (err) {
+    const msg = (err as Error).message;
+    // git returns non-zero when one side doesn't exist; surface a helpful note.
+    if (msg.includes("does not exist") || msg.includes("exists on disk")) {
+      throw new Error(
+        `Path ${safePath} does not exist in one or both releases (${releaseA}, ${releaseB})`
+      );
+    }
+    throw err;
+  }
+}
+
+/**
+ * Walk the worktree for `release`, optionally filtered by `prefix` (relative
+ * to the release root, e.g. "markdown/api-reference/scripts"). Returns up to
+ * `limit` entries (default 200). Useful for tree discovery when search misses.
+ */
+export function listTopics(
+  release: string,
+  prefix?: string,
+  limit = 200
+): { path: string }[] {
+  const root = worktreePath(release);
+  if (!existsSync(root)) return [];
+  const start = prefix ? join(root, sanitiseRelPath(prefix)) : join(root, "markdown");
+  if (!existsSync(start)) return [];
+  const out: { path: string }[] = [];
+  const stack: string[] = [start];
+  while (stack.length && out.length < limit) {
+    const dir = stack.pop()!;
+    let entries: string[] = [];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (out.length >= limit) break;
+      const full = join(dir, entry);
+      const st = statSync(full);
+      if (st.isDirectory()) {
+        stack.push(full);
+      } else if (st.isFile() && entry.toLowerCase().endsWith(".md")) {
+        out.push({ path: relative(root, full).replace(/\\/g, "/") });
+      }
+    }
+  }
+  return out;
 }
